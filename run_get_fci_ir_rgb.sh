@@ -1,8 +1,13 @@
 #!/bin/bash
 
+source /home/paugam/.myKey.sh
 source /home/paugam/miniconda3/bin/activate fci
 export logDir=/mnt/data3/SILEX/MTG-FCI/log
 export outDir=/mnt/data3/SILEX/MTG-FCI/
+
+if [ ! -f "$logDir/skipTime.txt" ]; then
+    touch "$logDir/skipTime.txt"
+fi
 
 if [ ! -f "$outDir/to_download.txt" ]; then
 
@@ -29,12 +34,28 @@ fi
 
 #download raw FCI data
 if [ ! -f $outDir/lock_download.txt ]; then
+    echo 'call fci_download.py'
     python /home/paugam/Src/Download-FCI/fci_download.py $utc_time4mtg $outDir >& $logDir/download.log
     export satus_download=$?
 fi
 
 echo 'status from fci_download.py'
 echo $satus_download
+
+if [ $satus_download -eq 3 ]; then
+    #data not found on eumetsat server we go forward
+    #echo "$utc_time4mtg" | cat - "$logDir/skipTime.txt" > temp && mv temp "$logDir/skipTime.txt"
+    { echo "$utc_time4mtg"; cat "$logDir/skipTime.txt"; } > temp && mv temp "$logDir/skipTime.txt"
+
+    # Replace T_ with space to make the datetime format more standard
+    datetime="${utc_time4mtg//T_/ }"
+    # Now pass the full expression as a single string to `-d`
+    new_time=$(date -u -d "$datetime +10 minutes" +"%Y-%m-%dT_%H%M")
+
+    echo $new_time &> $outDir/to_download.txt
+    rm  $outDir/lock_download.txt
+fi
+
 
 #orthorectify raw FCI data to rgb tiff and nc ir
 if [ $satus_download -eq 2 ]; then

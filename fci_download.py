@@ -82,7 +82,12 @@ def download_chunks_in_time_window(dirout, fci_collection, selected_collection, 
     Search for products in the given time window, download relevant .nc entries and trailer chunk (0041).
     """
 
+    if fci_collection == '0662':
+        expected_product_entry_size = 61
+    elif fci_collection == '0665':
+        expected_product_entry_size = 49
 
+    utc_now = datetime.now(timezone.utc)
 
     chunk_patterns = [f"_{cid}.nc" for cid in chunk_ids]
 
@@ -90,11 +95,12 @@ def download_chunks_in_time_window(dirout, fci_collection, selected_collection, 
     products = selected_collection.search(dtstart=dtstart, dtend=dtend)
     print(f"Found {len(products)} matching timestep(s).")
 
+    len_product_entry = 0  # assume nothing, so if behind schedule we pass, see below utc_now > dtstart.replace(tzinfo=timezone.utc)+timedelta(minutes=30)
     files_on_local_machine = 0
     # Filter relevant entries
     for product in products:
+        len_product_entry =  len(product.entries)
         for entry in product.entries:
-            #pdb.set_trace()
             if os.path.isfile(dirout+entry) : 
                 files_on_local_machine += 1
                 continue
@@ -110,11 +116,16 @@ def download_chunks_in_time_window(dirout, fci_collection, selected_collection, 
                         #print(f"Saved file {local_filename}")
                         
                         #prepend_line_and_limit(dirout, fci_collection, local_filename.split('.')[0])
-                
                 except Exception as e:
                     print(f"Error downloading {entry}: {e}")
 
-    #print('$$$$',files_on_local_machine- len(chunk_ids) + 1, len(products))
+    #for not being stuck on data not available. if we are 30 minute behind current time and len
+    if utc_now > dtstart.replace(tzinfo=timezone.utc)+timedelta(minutes=30): 
+        if len_product_entry < expected_product_entry_size:
+            return 'could not find chunck on eumetsat server' 
+
+    print('files on machine    : ',files_on_local_machine- len(chunk_ids) + 1)
+    print('products to download: ',len(products))
     if files_on_local_machine - len(chunk_ids) +1  == len(products):
         return 'all file here for collec'
     else:
@@ -168,8 +179,8 @@ if __name__ == '__main__':
     ############################################################
     # Insert your personal key and secret into the single quotes
     ############################################################
-    consumer_key = 'df3_zGBJub9Qm9a7fxrlfTI6wc0a'
-    consumer_secret = 'h1JBSxs6ywpqESVcuIisb0R8fC8a'
+    consumer_key = os.environ['EUMETSAT_consumer_key']       
+    consumer_secret = os.environ['EUMETSAT_consumer_secret'] 
 
     credentials = (consumer_key, consumer_secret)
 
@@ -186,7 +197,7 @@ if __name__ == '__main__':
     ##########################################################
     user_roi = {
         "lat_min": 35,
-        "lat_max": 46,
+        "lat_max": 51,
         "lon_min": -10,
         "lon_max": 20
     }
@@ -283,7 +294,10 @@ if __name__ == '__main__':
         #print(flag)
         if flag == 'all file here for collec': 
             all_good += 1 
-    
+   
+        if flag == 'could not find chunck on eumetsat server':
+            sys.exit(3)
+
     #print(all_good)
     if all_good == 2:
     #    prepend_time_downloaded(dirout, time_str_input)
