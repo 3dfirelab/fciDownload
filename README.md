@@ -32,8 +32,8 @@ pip install -r requirements.txt
 There is also a script to delet old raw data, see `clean_fci_rawData.sh`
 A cron example is:
 ```
-* * * * * /home/paugam/Src/Download-FCI/run_get_fci_ir_rgb.sh > /mnt/data3/SILEX/MTG-FCI/log/cron.log
-30 2 * * * /home/paugam/Src/Download-FCI/clean_fci_rawData.sh
+* * * * * /home/paugam/Src/fciDownload/run_get_fci_ir_rgb.sh > /mnt/data3/SILEX/MTG-FCI/log/cron.log
+30 2 * * * /home/paugam/Src/fciDownload/clean_fci_rawData.sh
 ```
 If the scrip is 30 minutes behind realtime and cannot find the number of entries product on the eumetsat server it will skip this time step and go forwad.
 A traks of the skipped time is saved in `$logDir/skipTime.txt`
