@@ -27,6 +27,7 @@ pip install -r requirements.txt
 ```
 3. set your `consumer_key` and `consumer_secret` in file to source in `run_get_fci_ir_rgb.sh` (see `source /home/paugam/.myKey.sh` in `run_get_fci_ir_rgb.sh`). To get yor key you need to log to [https://api.eumetsat.int/api-key/#](https://api.eumetsat.int/api-key/#)
 
+
 # How to run: 
 There is also a script to delet old raw data, see `clean_fci_rawData.sh`
 A cron example is:
@@ -37,11 +38,16 @@ A cron example is:
 If the scrip is 30 minutes behind realtime and cannot find the number of entries product on the eumetsat server it will skip this time step and go forwad.
 A traks of the skipped time is saved in `$logDir/skipTime.txt`
 
-# Time definition and Data Structure: 
+
+# When are the data available: 
+On a machine with Intel(R) Core(TM) i7-10700 CPU @ 2.90GHz, I could roughly have the ir netcdf in 18 min after FCI aquisition and the RGB in 20 minutes. The processing of the two is done sequentially. This could be done in paralell if we want to save time.  
+
+
+# Time definition: 
 The request data to eumetsat server made in `fci_download.py` is done with a 10 minute interval that matches the time aquisitin frequency of FCI. 
 Each chunk has a different time aquisition, however we collect all chuncks of one time request in one file that is set with the starting time of the request data range.
 
-
+# Data Structure: 
 All output of the scripts are saved in `$outDir` with this tree directories (last download was for 2025107.0950).
 ```
 $outDir
