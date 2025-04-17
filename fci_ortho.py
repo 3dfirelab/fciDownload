@@ -114,7 +114,7 @@ if __name__ == '__main__':
         sys.exit()
 
     #crop to zone
-    scn_cropped = scn_resampled.crop(xy_bbox=(-1.2E6, -6.34E6, 3.0E6, -4.78E6))
+    scn_cropped = scn_resampled.crop(xy_bbox=(-1.2E6, -6.34E6, 3.0E6, -4.2E6))
    
     #scn_cropped['ir_38'].plot()
     #plt.show()
@@ -181,6 +181,7 @@ if __name__ == '__main__':
                 del ds_ir[var].attrs[attrname]
     for attrname in attr2del:
         del ds_ir.attrs[attrname]
+    print('save NC')
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
         ds_ir.to_netcdf(diroutnc+'/fci-ir-SILEXdomain-{:s}.nc'.format(time_img_))
@@ -197,7 +198,21 @@ if __name__ == '__main__':
         warnings.simplefilter("ignore", category=RuntimeWarning)
         rgb = ds_vis[["R", "G", "B"]].to_array(dim="band") 
         rgb_single_time = rgb.isel(time=0)
-        rgb_single_time.rio.to_raster(dirouttiff+'/fci-rgb-SILEXdomain-{:s}.tiff'.format(time_img_))
+        
+        #mask = (rgb_single_time != 0) & ~np.isnan(rgb_single_time)
+        #print( 'test empty rgb', mask.any().compute().item())
+        
+        has_other_values = ((rgb_single_time != 0) & ~np.isnan(rgb_single_time)).any()
+
+        # If using Dask, compute the result
+        if hasattr(has_other_values, 'compute'):
+            has_other_values = has_other_values.compute()
+
+        print("Contains values other than 0 or NaN:", bool(has_other_values))
+
+        if (bool(has_other_values)): 
+            print('save RGB')
+            rgb_single_time.rio.to_raster(dirouttiff+'/fci-rgb-SILEXdomain-{:s}.tiff'.format(time_img_))
 
     del scn 
 
