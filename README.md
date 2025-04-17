@@ -21,6 +21,7 @@ and run the `fci_ortho.py` to generate 2 files:
 1. in `run_get_fci_ir_rgb.sh` define the directories for output (`$outDir`) and log (`$logdir`)
 2. set up a python environemnt named fci using the available `requirements.txt` file
 ```
+#for example:
 python -m venv ~/Venv/fci
 pip install -r requirements.txt
 ```
