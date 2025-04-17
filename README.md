@@ -35,3 +35,42 @@ A cron example is:
 ```
 If the scrip is 30 minutes behind realtime and cannot find the number of entries product on the eumetsat server it will skip this time step and go forwad.
 A traks of the skipped time is saved in `$logDir/skipTime.txt`
+
+# Time definition and Data Structure: 
+The request data to eumetsat server made in `fci_download.py` is done with a 10 minute interval that matches the time aquisitin frequency of FCI. 
+Each chunk has a different time aquisition, however we collect all chuncks of one time request in one file that is set with the starting time of the request data range.
+
+
+All output of the scripts are saved in `$outDir` with this tree directories (last download was for 2025107.0950).
+```
+$outDir
+├── data # only keeping last 2 days raw data
+│   ├── 20250416
+│   └── 20250417
+│       ├── W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+FCI-1C-RRAD-FDHSI-FD--CHK-BODY---NC4E_C_EUMT_20250417001030_IDPFI_OPE_20250417000744_20250417000834_N__O_0001_0033.nc
+│       ├── W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+FCI-1C-RRAD-FDHSI-FD--CHK-BODY---NC4E_C_EUMT_20250417001049_IDPFI_OPE_20250417000752_20250417000850_N__O_0001_0034.nc
+        ...
+│       └── W_XX-EUMETSAT-Darmstadt,IMG+SAT,MTI1+FCI-1C-RRAD-HRFI-FD--CHK-TRAIL---NC4E_C_EUMT_20250417095314_IDPFI_OPE_20250417095007_20250417095935_N__O_0060_0041.nc
+├── log
+│   ├── cron.log
+│   ├── download.log
+│   ├── ortho.log
+│   └── skipTime.txt
+├── nc
+│   ├── 20250404
+    ...
+│   └── 20250417
+│       ├── fci-ir-SILEXdomain-2025107.0000.nc
+        ...
+│       └── fci-ir-SILEXdomain-2025107.0950.nc
+├── tiff
+│   ├── 20250404
+    ...
+│   └── 20250417
+│       ├── fci-rgb-SILEXdomain-2025107.0240.tiff # first day light in the east of the domain
+        ...
+│       └── fci-rgb-SILEXdomain-2025107.0950.tiff
+└── to_download.txt
+
+```
+
