@@ -19,6 +19,12 @@ import geopandas as gpd
 import pandas as pd 
 from shapely.geometry import Point
 from pyproj import CRS, Transformer
+from shapely.geometry import box
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+from matplotlib.colors import LogNorm
+import tempfile
+from PIL import Image
 
 ##########################
 def adjust_da_attr(da):
@@ -61,6 +67,74 @@ def adjust_da_attr(da):
     return da
 
 
+#################################
+def plot_ir_png(ds_ir, bandname):
+    if bandname == 'ir_38':
+        diroutpngIR = diroutpngIR38
+        cmap= 'inferno'
+    elif bandname == 'nir_22':
+        diroutpngIR = diroutpngNIR22
+        cmap = 'hot' 
+
+    #plot IR png 
+    # Define the bounding box as a geometry
+    bbox = box(-10, 35, 20, 52)
+    
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="invalid value encountered in sin")
+        warnings.filterwarnings("ignore", message="invalid value encountered in cos")
+        ir_single_time_4326 = ds_ir.isel(time=0)[bandname].rio.reproject(4326)
+
+    # Clip using rioxarray
+    ir_clipped = ir_single_time_4326.rio.clip([bbox], crs="EPSG:4326", drop=True)
+    print('save IR-PNG', bandname)
+    lat_min = float(ir_clipped.y.min().values)
+    lat_max = float(ir_clipped.y.max().values)
+    lon_min = float(ir_clipped.x.min().values)
+    lon_max = float(ir_clipped.x.max().values)
+    #print("Leaflet imageBounds = [[{:.6f}, {:.6f}], [{:.6f}, {:.6f}]]".format(
+    #    lat_min, lon_min, lat_max, lon_max))
+
+    ir_clipped = ir_clipped.rio.reproject(3857)
+    
+    ir_np = ir_clipped.values
+
+    # Mask fill value (65535.0)
+    ir_np = np.where(ir_np >= 65535.0, np.nan, ir_np)
+
+    # Normalize using percentiles for contrast enhancement
+    # You can also set fixed vmin/vmax like 0 to 1.0 if physical reflectance
+    #for iband in range(3):
+    #    p2, p98 = np.nanpercentile(rgb_np[:,:,iband], (2, 98))
+    #    rgb_norm = np.copy(rgb_np)
+    #    rgb_norm[:,:,iband] = np.clip((rgb_np[:,:,iband] - p2) / (p98 - p2), 0, 1)
+    #p2, p98 = np.nanpercentile(ir_np, (2, 98))
+    #p2 = max([p2,0.01])
+    #ir_norm = np.clip((ir_np - p2) / (p98 - p2), 0, 1)
+    #print(p2, p98)
+
+    # Create temp file path
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
+        tmp_path = tmpfile.name
+    # Plot and save as PNG
+    #extent = [lon_min, lon_max, lat_min, lat_max]
+    figsize_ = (ir_np.shape[1]/400, ir_np.shape[0]/400)
+    fig = plt.figure(figsize=figsize_)
+    #plt.imshow(ir_np,norm=LogNorm(vmin=260,vmax=330), cmap=cmap)
+    plt.imshow(ir_np,vmin=260,vmax=330, cmap=cmap)
+    plt.axis('off')
+    plt.tight_layout()
+    plt.savefig(tmp_path,
+            dpi=100, bbox_inches='tight', pad_inches=0, transparent=True)
+    plt.close(fig)
+
+    # Now resize to 800x600 using PIL
+    img = Image.open(tmp_path)
+    img_resized = img.resize((800, 600), resample=Image.Resampling.LANCZOS)
+    out_path = f'{diroutpngIR}/fci-{bandname}-SILEXdomain-{time_img_}.png'
+    img_resized.save(out_path)
+
+
 if __name__ == '__main__':
    
     time_str_input = sys.argv[1] 
@@ -77,7 +151,13 @@ if __name__ == '__main__':
     os.makedirs(diroutnc,exist_ok=True)
     dirouttiff = '{:s}/{:s}/'.format(dirdata.replace('data/','tiff/'),dtstart.strftime("%Y%m%d"))
     os.makedirs(dirouttiff,exist_ok=True)
-    
+    diroutpngRGB = '{:s}/RGB/'.format(dirdata.replace('data/','png/'))
+    os.makedirs(diroutpngRGB,exist_ok=True)
+    diroutpngIR38 = '{:s}/IR38/'.format(dirdata.replace('data/','png/'))
+    os.makedirs(diroutpngIR38,exist_ok=True)
+    diroutpngNIR22 = '{:s}/NIR22/'.format(dirdata.replace('data/','png/'))
+    os.makedirs(diroutpngNIR22,exist_ok=True)
+
     files = find_files_and_readers(base_dir=dirin, reader='fci_l1c_nc', start_time=dtstart, end_time=dtend)
     
     # read the file
@@ -181,11 +261,15 @@ if __name__ == '__main__':
                 del ds_ir[var].attrs[attrname]
     for attrname in attr2del:
         del ds_ir.attrs[attrname]
-    print('save NC')
+    print('save IR NC')
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
         ds_ir.to_netcdf(diroutnc+'/fci-ir-SILEXdomain-{:s}.nc'.format(time_img_))
     
+    plot_ir_png(ds_ir, 'ir_38')
+    #plot_ir_png(ds_ir, 'nir_22')
+   
+    del ds_ir
     
     attr2del = ['area','_satpy_id', 'prerequisites', 'optional_prerequisites']
     for var in ds_vis.data_vars:
@@ -211,8 +295,72 @@ if __name__ == '__main__':
         print("Contains values other than 0 or NaN:", bool(has_other_values))
 
         if (bool(has_other_values)): 
-            print('save RGB')
+            print('save RGB-TIFF')
             rgb_single_time.rio.to_raster(dirouttiff+'/fci-rgb-SILEXdomain-{:s}.tiff'.format(time_img_))
+        
+        #plot RGB in png day and night
+        # Define the bounding box as a geometry
+        bbox = box(-10, 35, 20, 52)
+        
+        rgb_single_time_4326 = rgb_single_time.rio.reproject(4326)
+
+        # Clip using rioxarray
+        rgb_clipped = rgb_single_time_4326.rio.clip([bbox], crs="EPSG:4326", drop=True)
+        print('save RGB-PNG')
+        lat_min = float(rgb_clipped.y.min().values)
+        lat_max = float(rgb_clipped.y.max().values)
+        lon_min = float(rgb_clipped.x.min().values)
+        lon_max = float(rgb_clipped.x.max().values)
+        #print("Leaflet imageBounds = [[{:.6f}, {:.6f}], [{:.6f}, {:.6f}]]".format(
+        #    lat_min, lon_min, lat_max, lon_max))
+
+        rgb_clipped = rgb_clipped.rio.reproject(3857)
+
+        rgb_np = np.moveaxis(rgb_clipped.values, 0, -1)
+
+        # Mask fill value (65535.0)
+        rgb_np = np.where(rgb_np >= 65535.0, np.nan, rgb_np)
+
+        # Normalize using percentiles for contrast enhancement
+        # You can also set fixed vmin/vmax like 0 to 1.0 if physical reflectance
+        #for iband in range(3):
+        #    p2, p98 = np.nanpercentile(rgb_np[:,:,iband], (2, 98))
+        #    rgb_norm = np.copy(rgb_np)
+        #    rgb_norm[:,:,iband] = np.clip((rgb_np[:,:,iband] - p2) / (p98 - p2), 0, 1)
+        p2, p98 = np.nanpercentile(rgb_np, (2, 98))
+        rgb_norm = np.clip((rgb_np - p2) / (p98 - p2), 0, 1)
+
+        '''
+        # Plot and save as PNG
+        #extent = [lon_min, lon_max, lat_min, lat_max]
+        fig = plt.figure(figsize=(8, 6))
+        plt.imshow(rgb_norm)
+        plt.axis('off')
+        plt.tight_layout()
+        plt.savefig(diroutpngRGB + '/fci-rgb-SILEXdomain-{:s}.png'.format(time_img_),
+                dpi=100, bbox_inches='tight', pad_inches=0, transparent=True)
+        plt.close(fig)
+        '''
+        # Create temp file path
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
+            tmp_path = tmpfile.name
+        # Plot and save as PNG
+        #extent = [lon_min, lon_max, lat_min, lat_max]
+        figsize_ = (rgb_norm.shape[1]/400, rgb_norm.shape[0]/400)
+        fig = plt.figure(figsize=figsize_)
+        plt.imshow(rgb_norm)
+        plt.axis('off')
+        plt.tight_layout()
+        plt.savefig(tmp_path,
+                dpi=100, bbox_inches='tight', pad_inches=0, transparent=True)
+        plt.close(fig)
+
+        # Now resize to 800x600 using PIL
+        img = Image.open(tmp_path)
+        img_resized = img.resize((800, 600), resample=Image.Resampling.LANCZOS)
+        out_path = f'{diroutpngRGB}/fci-rgb-SILEXdomain-{time_img_}.png'
+        img_resized.save(out_path)
+
 
     del scn 
 

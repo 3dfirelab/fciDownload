@@ -254,7 +254,7 @@ if __name__ == '__main__':
         plot_chunk()
 
     all_good = 0 
-    for fci_collection in ['0662','0665']:
+    for fci_collection in ['0662','0665','0678']:
        
         #check if collection is available
         #lastAvailable = run_eumdac_search(fci_collection)

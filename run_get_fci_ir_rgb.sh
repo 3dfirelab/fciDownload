@@ -1,9 +1,22 @@
 #!/bin/bash
 
+# Create a temporary file
+TMP_LOG=$(mktemp)
+
+# Function to clean up temp file on exit
+cleanup() {
+    rm -f "$TMP_LOG"
+}
+trap cleanup EXIT
+
+
 source /home/paugam/.myKey.sh
 source /home/paugam/miniconda3/bin/activate fci
+export srcDir=/home/paugam/Src/fciDownload/
 export logDir=/mnt/data3/SILEX/MTG-FCI/log
 export outDir=/mnt/data3/SILEX/MTG-FCI/
+export webDir=/home/paugam/WebSite/leaflet/data/fci_png/
+export webDirVp9=/home/paugam/WebSite/leaflet/data/fci_vp9/
 
 if [ ! -f "$logDir/skipTime.txt" ]; then
     touch "$logDir/skipTime.txt"
@@ -35,8 +48,10 @@ fi
 #download raw FCI data
 if [ ! -f $outDir/lock_download.txt ]; then
     echo 'call fci_download.py'
-    python /home/paugam/Src/Download-FCI/fci_download.py $utc_time4mtg $outDir >& $logDir/download.log
+    python $srcDir/fci_download.py $utc_time4mtg $outDir >& $logDir/download.log
     export satus_download=$?
+else
+    exit 0
 fi
 
 echo 'status from fci_download.py'
@@ -59,24 +74,49 @@ fi
 
 #orthorectify raw FCI data to rgb tiff and nc ir
 if [ $satus_download -eq 2 ]; then
-    touch $outDir/lock_download.txt
-    python /home/paugam/Src/Download-FCI/fci_ortho.py $utc_time4mtg  >& $logDir/ortho.log
-   
-    if [ $? -ne 0 ]; then 
-        echo 'orth failed for '  $utc_time4mtg
-        stop
+    if pgrep -f "python /home/paugam/Src/fciDownload//fci_ortho.py" > /dev/null; then
+        exit 0
     else
-        echo 'ortho done, set now new time'
-    fi
-    # Replace T_ with space to make the datetime format more standard
-    datetime="${utc_time4mtg//T_/ }"
-    # Now pass the full expression as a single string to `-d`
-    new_time=$(date -u -d "$datetime +10 minutes" +"%Y-%m-%dT_%H%M")
+        touch $outDir/lock_download.txt
+        python $srcDir/fci_ortho.py $utc_time4mtg  >& $logDir/ortho.log
+       
+        if [ $? -ne 0 ]; then 
+            echo 'orth failed for '  $utc_time4mtg
+            stop
+        else
+            echo 'ortho done, set now new time'
+        fi
+        # Replace T_ with space to make the datetime format more standard
+        datetime="${utc_time4mtg//T_/ }"
+        # Now pass the full expression as a single string to `-d`
+        new_time=$(date -u -d "$datetime +10 minutes" +"%Y-%m-%dT_%H%M")
 
-    echo $new_time &> $outDir/to_download.txt
-    rm  $outDir/lock_download.txt
-fi
+        #udpate file on the data dir of the webserver
+        #python $srcDir/updateWebsite_with_last2days.py $outDir $webDir
+        #update webm only every hour
+        if [[ "${utc_time4mtg: -2}" == "00" ]]; then
+            python "$srcDir/updateWebsite_vp9_with_last2days.py" "$outDir" "$webDirVp9"
+            python "$srcDir/make_sidecar.py" "$webDirVp9/rgb.webm"
+            python "$srcDir/make_sidecar.py" "$webDirVp9/ir38.webm"
+        fi
+     
+        
+        echo $new_time &> $outDir/to_download.txt
+        rm  $outDir/lock_download.txt
+    fi
+fi 
 
 if [ $satus_download -eq 0 ]; then
     echo $utc_time4mtg &> $outDir/to_download.txt
 fi
+
+
+# Your script logic, redirect all output to temp log
+{
+    echo "Running the script at $(date)"
+    # your commands here
+} >> "$TMP_LOG" 2>&1
+
+# If we reached here, we want to write the output to cron.log
+cat "$TMP_LOG"
+
