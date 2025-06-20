@@ -84,12 +84,20 @@ def download_chunks_in_time_window(dirout, fci_collection, selected_collection, 
 
     if fci_collection == '0662':
         expected_product_entry_size = 61
+        chunk_ids_ = chunk_ids
     elif fci_collection == '0665':
         expected_product_entry_size = 49
+        chunk_ids_ = chunk_ids
+    else: 
+        expected_product_entry_size = 5
+        chunk_ids_ = None
 
     utc_now = datetime.now(timezone.utc)
 
-    chunk_patterns = [f"_{cid}.nc" for cid in chunk_ids]
+    if chunk_ids_ is not None:
+        chunk_patterns = [f"_{cid}.nc" for cid in chunk_ids_]
+    else:
+        chunk_patterns = ['None']
 
     # Products in time window
     products = selected_collection.search(dtstart=dtstart, dtend=dtend)
@@ -100,11 +108,13 @@ def download_chunks_in_time_window(dirout, fci_collection, selected_collection, 
     # Filter relevant entries
     for product in products:
         len_product_entry =  len(product.entries)
+        pdb.set_trace()
         for entry in product.entries:
+            print(entry)
             if os.path.isfile(dirout+entry) : 
                 files_on_local_machine += 1
                 continue
-            if any(pattern in entry for pattern in chunk_patterns):
+            if any(pattern in entry for pattern in chunk_patterns) or (('-CLM-' in entry) and ('.nc'in entry)) :
                 try:
                     with product.open(entry=entry) as fsrc:
                         local_filename = os.path.basename(fsrc.name)
@@ -124,9 +134,9 @@ def download_chunks_in_time_window(dirout, fci_collection, selected_collection, 
         if len_product_entry < expected_product_entry_size:
             return 'could not find chunck on eumetsat server' 
 
-    print('files on machine    : ',files_on_local_machine- len(chunk_ids) + 1)
+    print('files on machine    : ',files_on_local_machine- len(chunk_patterns) + 1)
     print('products to download: ',len(products))
-    if files_on_local_machine - len(chunk_ids) +1  == len(products):
+    if files_on_local_machine - len(chunk_patterns) +1  == len(products):
         return 'all file here for collec'
     else:
         return None
@@ -254,11 +264,15 @@ if __name__ == '__main__':
         plot_chunk()
 
     all_good = 0 
-    for fci_collection in ['0662','0665','0678']:
+    #for fci_collection in ['0662','0665','0678']:
+    for fci_collection in ['0662','0665']:
        
         #check if collection is available
         #lastAvailable = run_eumdac_search(fci_collection)
-        
+       
+        print('###################')
+        print('collection = ', fci_collection)
+        print('###################')
         '''
         if not(os.path.isfile('{:s}/../../last_downloaded_{:s}.txt'.format(dirout,fci_collection))):
             with open('{:s}/../../last_downloaded_{:s}.txt'.format(dirout,fci_collection), 'w') as f:
@@ -290,7 +304,7 @@ if __name__ == '__main__':
         # Run the function
         flag = download_chunks_in_time_window(dirout,fci_collection,
                                               selected_collection=selected_collection, dtstart=dtstart, dtend=dtend, chunk_ids=relevant_chunks)
-
+        print(flag)
         #print(flag)
         if flag == 'all file here for collec': 
             all_good += 1 

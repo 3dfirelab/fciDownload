@@ -159,7 +159,9 @@ if __name__ == '__main__':
     os.makedirs(diroutpngNIR22,exist_ok=True)
 
     files = find_files_and_readers(base_dir=dirin, reader='fci_l1c_nc', start_time=dtstart, end_time=dtend)
-    
+   
+    sys.exit()
+
     # read the file
     scn = Scene(filenames=files)
     
