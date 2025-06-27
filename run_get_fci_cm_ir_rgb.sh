@@ -13,12 +13,15 @@ trap cleanup EXIT
 source /home/paugam/.myKey.sh
 source /home/paugam/miniconda3/bin/activate fci
 export srcDir=/home/paugam/Src/fciDownload/
-export logDir=/mnt/data3/SILEX/MTG-FCI/log
-export outDir=/mnt/data3/SILEX/MTG-FCI/
+export logDir=/mnt/data3/SILEX/FCI/RASTER/log
+export outDir=/mnt/data3/SILEX/FCI/RASTER/
+
+#below variable are not necessary outside UPC
 export webDir=/home/paugam/WebSite/leaflet/data/fci_png/
 export webDirVp9=/home/paugam/WebSite/leaflet/data/fci_vp9/
 
 if [ ! -f "$logDir/skipTime.txt" ]; then
+    mkdir -p $logDir
     touch "$logDir/skipTime.txt"
 fi
 
@@ -51,6 +54,7 @@ if [ ! -f $outDir/lock_download.txt ]; then
     python $srcDir/fci_download.py $utc_time4mtg $outDir >& $logDir/download.log
     export satus_download=$?
 else
+    echo 'fci_download is locked'
     exit 0
 fi
 
@@ -78,7 +82,7 @@ if [ $satus_download -eq 2 ]; then
         exit 0
     else
         touch $outDir/lock_download.txt
-        python $srcDir/fci_ortho.py $utc_time4mtg  >& $logDir/ortho.log
+        python $srcDir/fci_ortho.py $utc_time4mtg $outDir >& $logDir/ortho.log
        
         if [ $? -ne 0 ]; then 
             echo 'orth failed for '  $utc_time4mtg
@@ -91,15 +95,17 @@ if [ $satus_download -eq 2 ]; then
         # Now pass the full expression as a single string to `-d`
         new_time=$(date -u -d "$datetime +10 minutes" +"%Y-%m-%dT_%H%M")
 
-        #udpate file on the data dir of the webserver
-        #python $srcDir/updateWebsite_with_last2days.py $outDir $webDir
-        #update webm only every hour
-        if [[ "${utc_time4mtg: -2}" == "00" ]]; then
-            python "$srcDir/updateWebsite_vp9_with_last2days.py" "$outDir" "$webDirVp9"
-            python "$srcDir/make_sidecar.py" "$webDirVp9/rgb.webm"
-            python "$srcDir/make_sidecar.py" "$webDirVp9/ir38.webm"
-        fi
-     
+        #only for estrella to udpate server at UPC
+        if [ "$(hostname)" = "estrella" ]; then
+            #udpate file on the data dir of the webserver
+            #python $srcDir/updateWebsite_with_last2days.py $outDir $webDir
+            #update webm only every hour
+            if [[ "${utc_time4mtg: -2}" == "00" ]]; then
+                python "$srcDir/updateWebsite_vp9_with_last2days.py" "$outDir" "$webDirVp9"
+                python "$srcDir/make_sidecar.py" "$webDirVp9/rgb.webm"
+                python "$srcDir/make_sidecar.py" "$webDirVp9/ir38.webm"
+            fi
+        fi 
         
         echo $new_time &> $outDir/to_download.txt
         rm  $outDir/lock_download.txt

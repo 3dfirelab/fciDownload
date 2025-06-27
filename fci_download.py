@@ -88,9 +88,12 @@ def download_chunks_in_time_window(dirout, fci_collection, selected_collection, 
     elif fci_collection == '0665':
         expected_product_entry_size = 49
         chunk_ids_ = chunk_ids
-    else: 
+    elif fci_collection == '0678':
         expected_product_entry_size = 5
         chunk_ids_ = None
+    else: 
+        print('stop here, fci_collection not defined: ',fci_collection )
+        sys.exit()
 
     utc_now = datetime.now(timezone.utc)
 
@@ -98,6 +101,8 @@ def download_chunks_in_time_window(dirout, fci_collection, selected_collection, 
         chunk_patterns = [f"_{cid}.nc" for cid in chunk_ids_]
     else:
         chunk_patterns = ['None']
+        dtstart += timedelta(seconds=1)
+        dtend   -= timedelta(seconds=1)
 
     # Products in time window
     products = selected_collection.search(dtstart=dtstart, dtend=dtend)
@@ -108,7 +113,6 @@ def download_chunks_in_time_window(dirout, fci_collection, selected_collection, 
     # Filter relevant entries
     for product in products:
         len_product_entry =  len(product.entries)
-        pdb.set_trace()
         for entry in product.entries:
             print(entry)
             if os.path.isfile(dirout+entry) : 
@@ -264,8 +268,8 @@ if __name__ == '__main__':
         plot_chunk()
 
     all_good = 0 
-    #for fci_collection in ['0662','0665','0678']:
-    for fci_collection in ['0662','0665']:
+    for fci_collection in ['0662','0665','0678']:
+    #for fci_collection in ['0662','0665']:
        
         #check if collection is available
         #lastAvailable = run_eumdac_search(fci_collection)
@@ -313,6 +317,6 @@ if __name__ == '__main__':
             sys.exit(3)
 
     #print(all_good)
-    if all_good == 2:
+    if all_good == 3:
     #    prepend_time_downloaded(dirout, time_str_input)
         sys.exit(2)

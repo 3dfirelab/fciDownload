@@ -47,7 +47,11 @@ def adjust_da_attr(da):
         if isinstance(value, datetime):
             da.attrs[attr] = value.strftime("%Y-%m-%d %H:%M:%S.%f") 
         if isinstance(value, bool):
-            da.attrs[attr] = value.astype(np.uint8)
+            try:
+                da.attrs[attr] = value.astype(np.uint8)
+            except AttributeError:
+                da.attrs[attr] = np.uint8(value)
+
         if isinstance(value, bool):
             da.attrs[attr] = int(value)
         if isinstance(value, np.ndarray):
@@ -144,13 +148,16 @@ if __name__ == '__main__':
     dtstart = datetime.strptime(time_str_input, "%Y-%m-%dT_%H%M") #- timedelta(minutes=30) #30 min latency from the datastore
     dtend   = dtstart + timedelta(minutes=10)
     
-    dirdata  ='/mnt/data3/SILEX/MTG-FCI/data/'
+    dirdata  =sys.argv[2]+'/data/'
     
     dirin = '{:s}/{:s}/'.format(dirdata,dtstart.strftime("%Y%m%d"))
     diroutnc = '{:s}/{:s}/'.format(dirdata.replace('data/','nc/'),dtstart.strftime("%Y%m%d"))
     os.makedirs(diroutnc,exist_ok=True)
     dirouttiff = '{:s}/{:s}/'.format(dirdata.replace('data/','tiff/'),dtstart.strftime("%Y%m%d"))
     os.makedirs(dirouttiff,exist_ok=True)
+    diroutCM = '{:s}/{:s}/'.format(dirdata.replace('data/','cloudMask/'),dtstart.strftime("%Y%m%d"))
+    os.makedirs(diroutCM,exist_ok=True)
+    
     diroutpngRGB = '{:s}/RGB/'.format(dirdata.replace('data/','png/'))
     os.makedirs(diroutpngRGB,exist_ok=True)
     diroutpngIR38 = '{:s}/IR38/'.format(dirdata.replace('data/','png/'))
@@ -158,10 +165,50 @@ if __name__ == '__main__':
     diroutpngNIR22 = '{:s}/NIR22/'.format(dirdata.replace('data/','png/'))
     os.makedirs(diroutpngNIR22,exist_ok=True)
 
+
+    ####################
+    #L2 data: Cloud Mask
+    ####################
+    files = find_files_and_readers(base_dir=dirin, reader='fci_l2_nc', start_time=dtstart, end_time=dtend)
+    
+    # read the file
+    scn = Scene(filenames=files)
+
+    #load clound maks 
+    with open(os.devnull, 'w') as fnull:
+        with contextlib.redirect_stdout(fnull), contextlib.redirect_stderr(fnull):
+            scn.load(['binary_cloud_mask'], upper_right_corner="NE")
+
+    scn_resampled = scn.resample("eurol1", resampler='nearest', radius_of_influence=5000)
+    scn_cropped = scn_resampled.crop(xy_bbox=(-1.2E6, -6.34E6, 3.0E6, -4.2E6))
+    
+    daCM = adjust_da_attr(scn_cropped['binary_cloud_mask'].rename('CloudMask'))
+    
+    time_ = scn_resampled['binary_cloud_mask'].attrs['start_time']
+
+    crs = daCM.attrs["area"].to_cartopy_crs()
+    daCM = daCM.rio.write_crs(crs,inplace=True)
+    daCM=daCM.drop_vars('crs')
+    daCM = daCM.expand_dims({"time": [time_]})  # Add time dimension
+    daCM.attrs['crs']=daCM.rio.crs.to_string()
+    
+    attr2del = ['area','_satpy_id', 'ancillary_variables']
+    for attrname in attr2del:
+        del daCM.attrs[attrname]
+    
+    print('save Cloud Mask')
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        daCM.to_netcdf(diroutCM+'/fci-cm-SILEXdomain-{:s}.nc'.format(time_.strftime("%Y%j.%H%M")))
+
+    del scn, scn_resampled, scn_cropped
+
+    ####################
+    #L1 data: IR and rgb
+    ####################
+
     files = find_files_and_readers(base_dir=dirin, reader='fci_l1c_nc', start_time=dtstart, end_time=dtend)
    
-    sys.exit()
-
     # read the file
     scn = Scene(filenames=files)
     
@@ -181,13 +228,15 @@ if __name__ == '__main__':
     #    # Create a transformer object
     #    transformer = Transformer.from_crs(projected_crs, target_crs, always_xy=True)
    
+    '''
     fdir38 = scn['ir_38']
     x = fdir38.x
     y = fdir38.y[::-1]
     yy,xx = np.meshgrid(y,x)
     dxx = np.diff(xx,axis=0)
     dyy = -1*np.diff(yy,axis=1)
-   
+    '''
+
     #get time
     time = scn_resampled['ir_38'].attrs['start_time']
     time_img_ = scn_resampled['ir_38'].attrs['start_time'].strftime("%Y%j.%H%M") 

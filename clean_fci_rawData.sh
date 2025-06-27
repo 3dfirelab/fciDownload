@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Set base directory
-DATA_DIR="/mnt/data3/SILEX/MTG-FCI/data"
+DATA_DIR="/mnt/data3/SILEX/FCI/RASTER/data"
 
 # Get yesterday's date in YYYYMMDD format
 YESTERDAY=$(date -d "yesterday" +"%Y%m%d")
