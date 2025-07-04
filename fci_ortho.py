@@ -155,10 +155,10 @@ if __name__ == '__main__':
     os.makedirs(diroutnc,exist_ok=True)
     dirouttiff = '{:s}/{:s}/'.format(sys.argv[2]+'/tiff/',dtstart.strftime("%Y%m%d"))
     os.makedirs(dirouttiff,exist_ok=True)
-    diroutCM = '{:s}/{:s}/'.format(sys.argv[2]+'/cloudMask/'),dtstart.strftime("%Y%m%d"))
+    diroutCM = '{:s}/{:s}/'.format(sys.argv[2]+'/cloudMask/',dtstart.strftime("%Y%m%d"))
     os.makedirs(diroutCM,exist_ok=True)
     
-    diroutpngRGB = '{:s}/RGB/'.format(sys.argv[2]+'/png/'))
+    diroutpngRGB = '{:s}/RGB/'.format(sys.argv[2]+'/png/')
     os.makedirs(diroutpngRGB,exist_ok=True)
     diroutpngIR38 = '{:s}/IR38/'.format(sys.argv[2]+'/png/')
     os.makedirs(diroutpngIR38,exist_ok=True)
