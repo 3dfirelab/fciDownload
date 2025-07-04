@@ -150,19 +150,19 @@ if __name__ == '__main__':
     
     dirdata  =sys.argv[2]+'/data/'
     
-    dirin = '{:s}/{:s}/'.format(dirdata,dtstart.strftime("%Y%m%d"))
-    diroutnc = '{:s}/{:s}/'.format(dirdata.replace('data/','nc/'),dtstart.strftime("%Y%m%d"))
+    dirin = '{:s}/{:s}/'.format(sys.argv[2]+'/data/',dtstart.strftime("%Y%m%d"))
+    diroutnc = '{:s}/{:s}/'.format(sys.argv[2]+'/nc/',dtstart.strftime("%Y%m%d"))
     os.makedirs(diroutnc,exist_ok=True)
-    dirouttiff = '{:s}/{:s}/'.format(dirdata.replace('data/','tiff/'),dtstart.strftime("%Y%m%d"))
+    dirouttiff = '{:s}/{:s}/'.format(sys.argv[2]+'/tiff/',dtstart.strftime("%Y%m%d"))
     os.makedirs(dirouttiff,exist_ok=True)
-    diroutCM = '{:s}/{:s}/'.format(dirdata.replace('data/','cloudMask/'),dtstart.strftime("%Y%m%d"))
+    diroutCM = '{:s}/{:s}/'.format(sys.argv[2]+'/cloudMask/'),dtstart.strftime("%Y%m%d"))
     os.makedirs(diroutCM,exist_ok=True)
     
-    diroutpngRGB = '{:s}/RGB/'.format(dirdata.replace('data/','png/'))
+    diroutpngRGB = '{:s}/RGB/'.format(sys.argv[2]+'/png/'))
     os.makedirs(diroutpngRGB,exist_ok=True)
-    diroutpngIR38 = '{:s}/IR38/'.format(dirdata.replace('data/','png/'))
+    diroutpngIR38 = '{:s}/IR38/'.format(sys.argv[2]+'/png/')
     os.makedirs(diroutpngIR38,exist_ok=True)
-    diroutpngNIR22 = '{:s}/NIR22/'.format(dirdata.replace('data/','png/'))
+    diroutpngNIR22 = '{:s}/NIR22/'.format(sys.argv[2]+'/png/')
     os.makedirs(diroutpngNIR22,exist_ok=True)
 
 
