@@ -101,11 +101,18 @@ def download_chunks_in_time_window(dirout, fci_collection, selected_collection, 
         chunk_patterns = [f"_{cid}.nc" for cid in chunk_ids_]
     else:
         chunk_patterns = ['None']
-        dtstart += timedelta(seconds=1)
-        dtend   -= timedelta(seconds=1)
+        #dtstart += timedelta(seconds=1)
+        #dtend   -= timedelta(seconds=1)
 
     # Products in time window
     products = selected_collection.search(dtstart=dtstart, dtend=dtend)
+    if (len(chunk_patterns)==1) & (len(products) != 1 ): # correction time windows if more than 1 or 0 file found in EUMETSAT server 
+        dtstart += timedelta(seconds=1)
+        dtend   -= timedelta(seconds=1)
+    
+    products = selected_collection.search(dtstart=dtstart, dtend=dtend)
+
+    print(f"Time window: from {dtstart} to {dtend}.")
     print(f"Found {len(products)} matching timestep(s).")
 
     len_product_entry = 0  # assume nothing, so if behind schedule we pass, see below utc_now > dtstart.replace(tzinfo=timezone.utc)+timedelta(minutes=30)
@@ -114,7 +121,7 @@ def download_chunks_in_time_window(dirout, fci_collection, selected_collection, 
     for product in products:
         len_product_entry =  len(product.entries)
         for entry in product.entries:
-            print(entry)
+            #print(entry)
             if os.path.isfile(dirout+entry) : 
                 files_on_local_machine += 1
                 continue
@@ -290,7 +297,6 @@ if __name__ == '__main__':
             continue
         '''
 
-        print(f"Time window: from {dtstart} to {dtend}.")
         datastore = eumdac.DataStore(token)
         selected_collection = datastore.get_collection('EO:EUM:DAT:{:s}'.format(fci_collection))
         

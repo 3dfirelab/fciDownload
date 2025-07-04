@@ -169,40 +169,43 @@ if __name__ == '__main__':
     ####################
     #L2 data: Cloud Mask
     ####################
-    files = find_files_and_readers(base_dir=dirin, reader='fci_l2_nc', start_time=dtstart, end_time=dtend)
-    
-    # read the file
-    scn = Scene(filenames=files)
+    try:
+        files = find_files_and_readers(base_dir=dirin, reader='fci_l2_nc', start_time=dtstart, end_time=dtend)
+        
+        # read the file
+        scn = Scene(filenames=files)
 
-    #load clound maks 
-    with open(os.devnull, 'w') as fnull:
-        with contextlib.redirect_stdout(fnull), contextlib.redirect_stderr(fnull):
-            scn.load(['binary_cloud_mask'], upper_right_corner="NE")
+        #load clound maks 
+        with open(os.devnull, 'w') as fnull:
+            with contextlib.redirect_stdout(fnull), contextlib.redirect_stderr(fnull):
+                scn.load(['binary_cloud_mask'], upper_right_corner="NE")
 
-    scn_resampled = scn.resample("eurol1", resampler='nearest', radius_of_influence=5000)
-    scn_cropped = scn_resampled.crop(xy_bbox=(-1.2E6, -6.34E6, 3.0E6, -4.2E6))
-    
-    daCM = adjust_da_attr(scn_cropped['binary_cloud_mask'].rename('CloudMask'))
-    
-    time_ = scn_resampled['binary_cloud_mask'].attrs['start_time']
+        scn_resampled = scn.resample("eurol1", resampler='nearest', radius_of_influence=5000)
+        scn_cropped = scn_resampled.crop(xy_bbox=(-1.2E6, -6.34E6, 3.0E6, -4.2E6))
+        
+        daCM = adjust_da_attr(scn_cropped['binary_cloud_mask'].rename('CloudMask'))
+        
+        time_ = scn_resampled['binary_cloud_mask'].attrs['start_time']
 
-    crs = daCM.attrs["area"].to_cartopy_crs()
-    daCM = daCM.rio.write_crs(crs,inplace=True)
-    daCM=daCM.drop_vars('crs')
-    daCM = daCM.expand_dims({"time": [time_]})  # Add time dimension
-    daCM.attrs['crs']=daCM.rio.crs.to_string()
-    
-    attr2del = ['area','_satpy_id', 'ancillary_variables']
-    for attrname in attr2del:
-        del daCM.attrs[attrname]
-    
-    print('save Cloud Mask')
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=RuntimeWarning)
-        daCM.to_netcdf(diroutCM+'/fci-cm-SILEXdomain-{:s}.nc'.format(time_.strftime("%Y%j.%H%M")))
+        crs = daCM.attrs["area"].to_cartopy_crs()
+        daCM = daCM.rio.write_crs(crs,inplace=True)
+        daCM=daCM.drop_vars('crs')
+        daCM = daCM.expand_dims({"time": [time_]})  # Add time dimension
+        daCM.attrs['crs']=daCM.rio.crs.to_string()
+        
+        attr2del = ['area','_satpy_id', 'ancillary_variables']
+        for attrname in attr2del:
+            del daCM.attrs[attrname]
+        
+        print('save Cloud Mask')
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            daCM.to_netcdf(diroutCM+'/fci-cm-SILEXdomain-{:s}.nc'.format(time_.strftime("%Y%j.%H%M")))
 
-    del scn, scn_resampled, scn_cropped
-
+        del scn, scn_resampled, scn_cropped
+    except:
+        print('ortho l2 cloud mask failed')
+        pass
     ####################
     #L1 data: IR and rgb
     ####################
