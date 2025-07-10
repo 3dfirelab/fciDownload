@@ -81,8 +81,6 @@ def plot_ir_png(ds_ir, bandname):
         cmap = 'hot' 
 
     #plot IR png 
-    # Define the bounding box as a geometry
-    bbox = box(-10, 35, 20, 52)
     
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="invalid value encountered in sin")
@@ -147,6 +145,7 @@ if __name__ == '__main__':
     ##########################################################
     dtstart = datetime.strptime(time_str_input, "%Y-%m-%dT_%H%M") #- timedelta(minutes=30) #30 min latency from the datastore
     dtend   = dtstart + timedelta(minutes=10)
+    bbox = box(-10, 35, 20, 52)
     
     dirdata  =sys.argv[2]+'/data/'
     
@@ -157,14 +156,16 @@ if __name__ == '__main__':
     os.makedirs(dirouttiff,exist_ok=True)
     diroutCM = '{:s}/{:s}/'.format(sys.argv[2]+'/cloudMask/',dtstart.strftime("%Y%m%d"))
     os.makedirs(diroutCM,exist_ok=True)
-    
-    diroutpngRGB = '{:s}/RGB/'.format(sys.argv[2]+'/png/')
-    os.makedirs(diroutpngRGB,exist_ok=True)
-    diroutpngIR38 = '{:s}/IR38/'.format(sys.argv[2]+'/png/')
-    os.makedirs(diroutpngIR38,exist_ok=True)
-    diroutpngNIR22 = '{:s}/NIR22/'.format(sys.argv[2]+'/png/')
-    os.makedirs(diroutpngNIR22,exist_ok=True)
 
+    flag_png = False
+
+    if flag_png:
+        diroutpngRGB = '{:s}/RGB/'.format(sys.argv[2]+'/png/')
+        os.makedirs(diroutpngRGB,exist_ok=True)
+        diroutpngIR38 = '{:s}/IR38/'.format(sys.argv[2]+'/png/')
+        os.makedirs(diroutpngIR38,exist_ok=True)
+        diroutpngNIR22 = '{:s}/NIR22/'.format(sys.argv[2]+'/png/')
+        os.makedirs(diroutpngNIR22,exist_ok=True)
 
     ####################
     #L2 data: Cloud Mask
@@ -196,13 +197,24 @@ if __name__ == '__main__':
         attr2del = ['area','_satpy_id', 'ancillary_variables']
         for attrname in attr2del:
             del daCM.attrs[attrname]
-        
+            
+        min_lon, min_lat, max_lon, max_lat = bbox.bounds
+        daCM_4326 = daCM.rio.reproject(4326)
+        daCM_4326 = da_CM_4326.rename({'x': 'lon', 'y': 'lat'})        
+        # Ensure latitude is increasing or decreasing and slice accordingly
+        if da_CM_4326.lat[0] < da_CM_4326.lat[-1]:
+            da_CM_4326_crop = daCM_4326.sel(lat=slice(min_lat, max_lat), lon=slice(min_lon, max_lon))
+        else:
+            da_CM_4326_crop = daCM_4326.sel(lat=slice(max_lat, min_lat), lon=slice(min_lon, max_lon))
+
+
         print('save Cloud Mask')
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
-            daCM.to_netcdf(diroutCM+'/fci-cm-SILEXdomain-{:s}.nc'.format(time_.strftime("%Y%j.%H%M")))
+            da_CM_4326_crop.to_netcdf(diroutCM+'/fci-cm-SILEXdomain-{:s}.nc'.format(time_.strftime("%Y%j.%H%M")))
 
         del scn, scn_resampled, scn_cropped
+    
     except:
         print('ortho l2 cloud mask failed')
         pass
@@ -288,7 +300,8 @@ if __name__ == '__main__':
     ds_ir=ds_ir.drop_vars('crs')
     ds_ir = ds_ir.expand_dims({"time": [time]})  # Add time dimension
     ds_ir.attrs['crs']=ds_ir.rio.crs.to_string()
-    
+   
+
     ds_vis = ds_vis.rio.write_crs(crs,inplace=True)
     ds_vis=ds_vis.drop_vars('crs')
     ds_vis = ds_vis.expand_dims({"time": [time]})  # Add time dimension
@@ -318,11 +331,21 @@ if __name__ == '__main__':
     print('save IR NC')
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
-        ds_ir.to_netcdf(diroutnc+'/fci-ir-SILEXdomain-{:s}.nc'.format(time_img_))
+        min_lon, min_lat, max_lon, max_lat = bbox.bounds
+        ds_ir_4326 = ds_ir.rio.reproject(4326)
+        ds_ir_4326 = ds_ir_4326.rename({'x': 'lon', 'y': 'lat'})        
+        # Ensure latitude is increasing or decreasing and slice accordingly
+        if ds_ir_4326.lat[0] < ds_ir_4326.lat[-1]:
+            ds_ir_crop_4326 = ds_ir_4326.sel(lat=slice(min_lat, max_lat), lon=slice(min_lon, max_lon))
+        else:
+            ds_ir_crop_4326 = ds_ir_4326.sel(lat=slice(max_lat, min_lat), lon=slice(min_lon, max_lon))
+
+        ds_ir_crop_4326.to_netcdf(diroutnc+'/fci-ir-SILEXdomain-{:s}.nc'.format(time_img_))
     
-    plot_ir_png(ds_ir, 'ir_38')
-    #plot_ir_png(ds_ir, 'nir_22')
-   
+    if flag_png:
+        plot_ir_png(ds_ir, 'ir_38')
+        plot_ir_png(ds_ir, 'nir_22')
+    
     del ds_ir
     
     attr2del = ['area','_satpy_id', 'prerequisites', 'optional_prerequisites']
@@ -347,73 +370,70 @@ if __name__ == '__main__':
             has_other_values = has_other_values.compute()
 
         print("Contains values other than 0 or NaN:", bool(has_other_values))
-
         if (bool(has_other_values)): 
+        
+            min_lon, min_lat, max_lon, max_lat = bbox.bounds
+            rgb_single_time_4326 = rgb_single_time.rio.reproject(4326)
+            rgb_single_time_4326 = rgb_single_time_4326.rename({'x': 'lon', 'y': 'lat'})        
+            # Ensure latitude is increasing or decreasing and slice accordingly
+            if rgb_single_time_4326.lat[0] < rgb_single_time_4326.lat[-1]:
+                rgb_single_time_4326_crop = rgb_single_time_4326.sel(lat=slice(min_lat, max_lat), lon=slice(min_lon, max_lon))
+            else:
+                rgb_single_time_4326_crop = rgb_single_time_4326.sel(lat=slice(max_lat, min_lat), lon=slice(min_lon, max_lon))
+
             print('save RGB-TIFF')
-            rgb_single_time.rio.to_raster(dirouttiff+'/fci-rgb-SILEXdomain-{:s}.tiff'.format(time_img_))
-        
-        #plot RGB in png day and night
-        # Define the bounding box as a geometry
-        bbox = box(-10, 35, 20, 52)
-        
-        rgb_single_time_4326 = rgb_single_time.rio.reproject(4326)
+            rgb_single_time_4326.rio.to_raster(dirouttiff+'/fci-rgb-SILEXdomain-{:s}.tiff'.format(time_img_))
+       
+        if flag_png:
+            #plot RGB in png day and night
+            # Define the bounding box as a geometry
+            
 
-        # Clip using rioxarray
-        rgb_clipped = rgb_single_time_4326.rio.clip([bbox], crs="EPSG:4326", drop=True)
-        print('save RGB-PNG')
-        lat_min = float(rgb_clipped.y.min().values)
-        lat_max = float(rgb_clipped.y.max().values)
-        lon_min = float(rgb_clipped.x.min().values)
-        lon_max = float(rgb_clipped.x.max().values)
-        #print("Leaflet imageBounds = [[{:.6f}, {:.6f}], [{:.6f}, {:.6f}]]".format(
-        #    lat_min, lon_min, lat_max, lon_max))
+            # Clip using rioxarray
+            rgb_clipped = rgb_single_time_4326.rio.clip([bbox], crs="EPSG:4326", drop=True)
+            print('save RGB-PNG')
+            lat_min = float(rgb_clipped.y.min().values)
+            lat_max = float(rgb_clipped.y.max().values)
+            lon_min = float(rgb_clipped.x.min().values)
+            lon_max = float(rgb_clipped.x.max().values)
+            #print("Leaflet imageBounds = [[{:.6f}, {:.6f}], [{:.6f}, {:.6f}]]".format(
+            #    lat_min, lon_min, lat_max, lon_max))
 
-        rgb_clipped = rgb_clipped.rio.reproject(3857)
+            rgb_clipped = rgb_clipped.rio.reproject(3857)
 
-        rgb_np = np.moveaxis(rgb_clipped.values, 0, -1)
+            rgb_np = np.moveaxis(rgb_clipped.values, 0, -1)
 
-        # Mask fill value (65535.0)
-        rgb_np = np.where(rgb_np >= 65535.0, np.nan, rgb_np)
+            # Mask fill value (65535.0)
+            rgb_np = np.where(rgb_np >= 65535.0, np.nan, rgb_np)
 
-        # Normalize using percentiles for contrast enhancement
-        # You can also set fixed vmin/vmax like 0 to 1.0 if physical reflectance
-        #for iband in range(3):
-        #    p2, p98 = np.nanpercentile(rgb_np[:,:,iband], (2, 98))
-        #    rgb_norm = np.copy(rgb_np)
-        #    rgb_norm[:,:,iband] = np.clip((rgb_np[:,:,iband] - p2) / (p98 - p2), 0, 1)
-        p2, p98 = np.nanpercentile(rgb_np, (2, 98))
-        rgb_norm = np.clip((rgb_np - p2) / (p98 - p2), 0, 1)
+            # Normalize using percentiles for contrast enhancement
+            # You can also set fixed vmin/vmax like 0 to 1.0 if physical reflectance
+            #for iband in range(3):
+            #    p2, p98 = np.nanpercentile(rgb_np[:,:,iband], (2, 98))
+            #    rgb_norm = np.copy(rgb_np)
+            #    rgb_norm[:,:,iband] = np.clip((rgb_np[:,:,iband] - p2) / (p98 - p2), 0, 1)
+            p2, p98 = np.nanpercentile(rgb_np, (2, 98))
+            rgb_norm = np.clip((rgb_np - p2) / (p98 - p2), 0, 1)
 
-        '''
-        # Plot and save as PNG
-        #extent = [lon_min, lon_max, lat_min, lat_max]
-        fig = plt.figure(figsize=(8, 6))
-        plt.imshow(rgb_norm)
-        plt.axis('off')
-        plt.tight_layout()
-        plt.savefig(diroutpngRGB + '/fci-rgb-SILEXdomain-{:s}.png'.format(time_img_),
-                dpi=100, bbox_inches='tight', pad_inches=0, transparent=True)
-        plt.close(fig)
-        '''
-        # Create temp file path
-        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
-            tmp_path = tmpfile.name
-        # Plot and save as PNG
-        #extent = [lon_min, lon_max, lat_min, lat_max]
-        figsize_ = (rgb_norm.shape[1]/400, rgb_norm.shape[0]/400)
-        fig = plt.figure(figsize=figsize_)
-        plt.imshow(rgb_norm)
-        plt.axis('off')
-        plt.tight_layout()
-        plt.savefig(tmp_path,
-                dpi=100, bbox_inches='tight', pad_inches=0, transparent=True)
-        plt.close(fig)
+            # Create temp file path
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
+                tmp_path = tmpfile.name
+            # Plot and save as PNG
+            #extent = [lon_min, lon_max, lat_min, lat_max]
+            figsize_ = (rgb_norm.shape[1]/400, rgb_norm.shape[0]/400)
+            fig = plt.figure(figsize=figsize_)
+            plt.imshow(rgb_norm)
+            plt.axis('off')
+            plt.tight_layout()
+            plt.savefig(tmp_path,
+                    dpi=100, bbox_inches='tight', pad_inches=0, transparent=True)
+            plt.close(fig)
 
-        # Now resize to 800x600 using PIL
-        img = Image.open(tmp_path)
-        img_resized = img.resize((800, 600), resample=Image.Resampling.LANCZOS)
-        out_path = f'{diroutpngRGB}/fci-rgb-SILEXdomain-{time_img_}.png'
-        img_resized.save(out_path)
+            # Now resize to 800x600 using PIL
+            img = Image.open(tmp_path)
+            img_resized = img.resize((800, 600), resample=Image.Resampling.LANCZOS)
+            out_path = f'{diroutpngRGB}/fci-rgb-SILEXdomain-{time_img_}.png'
+            img_resized.save(out_path)
 
 
     del scn 
