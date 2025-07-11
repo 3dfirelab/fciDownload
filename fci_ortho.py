@@ -171,18 +171,23 @@ if __name__ == '__main__':
     #L2 data: Cloud Mask
     ####################
     try:
+        print('save Cloud Mask')
         files = find_files_and_readers(base_dir=dirin, reader='fci_l2_nc', start_time=dtstart, end_time=dtend)
         
-        # read the file
-        scn = Scene(filenames=files)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=UserWarning)
+            # read the file
+            scn = Scene(filenames=files)
 
-        #load clound maks 
-        with open(os.devnull, 'w') as fnull:
-            with contextlib.redirect_stdout(fnull), contextlib.redirect_stderr(fnull):
-                scn.load(['binary_cloud_mask'], upper_right_corner="NE")
+            #load clound maks 
+            with open(os.devnull, 'w') as fnull:
+                with contextlib.redirect_stdout(fnull), contextlib.redirect_stderr(fnull):
+                    scn.load(['binary_cloud_mask'], upper_right_corner="NE")
 
-        scn_resampled = scn.resample("eurol1", resampler='nearest', radius_of_influence=5000)
-        scn_cropped = scn_resampled.crop(xy_bbox=(-1.2E6, -6.34E6, 3.0E6, -4.2E6))
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")    
+                scn_resampled = scn.resample("eurol1", resampler='nearest', radius_of_influence=5000)
+                scn_cropped = scn_resampled.crop(xy_bbox=(-1.2E6, -6.34E6, 3.0E6, -4.2E6))
         
         daCM = adjust_da_attr(scn_cropped['binary_cloud_mask'].rename('CloudMask'))
         
@@ -199,24 +204,41 @@ if __name__ == '__main__':
             del daCM.attrs[attrname]
             
         min_lon, min_lat, max_lon, max_lat = bbox.bounds
-        daCM_4326 = daCM.rio.reproject(4326)
-        daCM_4326 = da_CM_4326.rename({'x': 'lon', 'y': 'lat'})        
+        with warnings.catch_warnings():    
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            daCM_4326 = daCM.rio.reproject(4326)
+        daCM_4326 = daCM_4326.rename({'x': 'lon', 'y': 'lat'})        
         # Ensure latitude is increasing or decreasing and slice accordingly
-        if da_CM_4326.lat[0] < da_CM_4326.lat[-1]:
+        if daCM_4326.lat[0] < daCM_4326.lat[-1]:
             da_CM_4326_crop = daCM_4326.sel(lat=slice(min_lat, max_lat), lon=slice(min_lon, max_lon))
         else:
             da_CM_4326_crop = daCM_4326.sel(lat=slice(max_lat, min_lat), lon=slice(min_lon, max_lon))
 
-
-        print('save Cloud Mask')
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", category=RuntimeWarning)
+            
+            # Compute time in seconds since reference
+            da_CM_4326_crop = da_CM_4326_crop.copy()
+            ref_time = np.datetime64("2025-01-01T00:00:00")
+            seconds_since_ref = (da_CM_4326_crop.time.values - ref_time) / np.timedelta64(1, "s")
+
+            # Replace the time coordinate
+            da_CM_4326_crop = da_CM_4326_crop.assign_coords(time=seconds_since_ref)
+
+            # Set encoding
+            da_CM_4326_crop.time.encoding.update({
+                "units": "seconds since 2025-01-01 00:00:00",
+                "dtype": "float64",
+                "calendar": "standard"
+            })
+            
             da_CM_4326_crop.to_netcdf(diroutCM+'/fci-cm-SILEXdomain-{:s}.nc'.format(time_.strftime("%Y%j.%H%M")))
 
         del scn, scn_resampled, scn_cropped
     
     except:
         print('ortho l2 cloud mask failed')
+        pdb.set_trace()
         pass
     ####################
     #L1 data: IR and rgb
@@ -340,6 +362,21 @@ if __name__ == '__main__':
         else:
             ds_ir_crop_4326 = ds_ir_4326.sel(lat=slice(max_lat, min_lat), lon=slice(min_lon, max_lon))
 
+        # Compute time in seconds since reference
+        ds_ir_crop_4326 = ds_ir_crop_4326.copy()
+        ref_time = np.datetime64("2025-01-01T00:00:00")
+        seconds_since_ref = (ds_ir_crop_4326.time.values - ref_time) / np.timedelta64(1, "s")
+
+        # Replace the time coordinate
+        ds_ir_crop_4326 = ds_ir_crop_4326.assign_coords(time=seconds_since_ref)
+
+        # Set encoding
+        ds_ir_crop_4326.time.attrs.update({
+            "units": "seconds since 2025-01-01 00:00:00",
+            "dtype": "float64",
+            "calendar": "standard"
+        })
+
         ds_ir_crop_4326.to_netcdf(diroutnc+'/fci-ir-SILEXdomain-{:s}.nc'.format(time_img_))
     
     if flag_png:
@@ -355,6 +392,7 @@ if __name__ == '__main__':
                 del ds_vis[var].attrs[attrname]
     for attrname in attr2del:
         del ds_vis.attrs[attrname]
+    print('save RGB-TIFF')
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", category=RuntimeWarning)
         rgb = ds_vis[["R", "G", "B"]].to_array(dim="band") 
@@ -381,9 +419,13 @@ if __name__ == '__main__':
             else:
                 rgb_single_time_4326_crop = rgb_single_time_4326.sel(lat=slice(max_lat, min_lat), lon=slice(min_lon, max_lon))
 
-            print('save RGB-TIFF')
-            rgb_single_time_4326.rio.to_raster(dirouttiff+'/fci-rgb-SILEXdomain-{:s}.tiff'.format(time_img_))
-       
+            time_value = pd.to_datetime(ds_vis.time.values[0]).isoformat()
+            #rgb_single_time_4326.rio.to_raster(dirouttiff+'/fci-rgb-SILEXdomain-{:s}.tiff'.format(time_img_))
+            rgb_single_time_4326_crop.rio.to_raster(
+                f"{dirouttiff}/fci-rgb-SILEXdomain-{time_img_}.tiff",
+                tags={"TIFFTAG_DATETIME": time_value}
+            )
+
         if flag_png:
             #plot RGB in png day and night
             # Define the bounding box as a geometry
